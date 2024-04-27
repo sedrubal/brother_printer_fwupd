@@ -21,7 +21,7 @@ def upload_fw(
     cat LZ5413_P.djf | nc lp.local 9100
     ```
     """
-    if port is not None:
+    if port is None:
         try:
             port = socket.getservbyname(PORT_SERVICE_NAME)
         except OSError:
