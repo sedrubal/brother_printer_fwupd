@@ -223,3 +223,4 @@ def download_fw(
             print(f"\r{progress: 5.1f} %", end="", flush=True)
 
     print()
+    return out_file
