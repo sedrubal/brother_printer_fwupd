@@ -77,7 +77,7 @@ def get_download_url(
 
     errors: list[ValueError] = []
 
-    for modification_callback in (copy, apply_mfc_l3750cdw_hack):
+    for modification_callback in (copy, apply_api_misspelling):
         api_request_data = modification_callback(api_request_data)
 
         # curl -X POST -d @hl3040cn-update.xml -H "Content-Type:text/xml"
@@ -99,7 +99,7 @@ def get_download_url(
             return parse_response(response=resp.text, firmid=firmid)
         except ValueError as err:
             errors.append(err)
-            LOGGER.error(err)
+            LOGGER.warning(err)
             continue
 
     raise ExceptionGroup("Giving up fetching firmware.", errors)
@@ -149,7 +149,7 @@ def parse_response(response: str, firmid: str) -> tuple[str | None, str | None]:
 
     latest_version = select_one("LATESTVERSION")
     LOGGER.info(
-        "Firmware update for %s to version %s required.", firmid, latest_version
+        "Update for firmware part '%s' available (version '%s')", firmid, latest_version
     )
 
     firmid_val = select_one("FIRMID")
@@ -163,7 +163,7 @@ def parse_response(response: str, firmid: str) -> tuple[str | None, str | None]:
     return latest_version, select_one("PATH")
 
 
-def apply_mfc_l3750cdw_hack(data: BeautifulSoup) -> BeautifulSoup:
+def apply_api_misspelling(data: BeautifulSoup) -> BeautifulSoup:
     """
     Modify the request data in the way it is required for MFC-L3750CDW.
 
@@ -171,7 +171,7 @@ def apply_mfc_l3750cdw_hack(data: BeautifulSoup) -> BeautifulSoup:
     2. Add "EWS" to `<DRIVER>`
     See https://github.com/sedrubal/brother_printer_fwupd/issues/19
     """
-    LOGGER.info("Retry with MFC-L3750CDW hack...")
+    LOGGER.info("Trying again with misspelling in API request...")
     data = copy(data)
     data.REQUESTINFO.FIRMUPDATEINFO.MODELINFO.DRIVER.string = "EWS"
     data.REQUESTINFO.FIRMUPDATEINFO.MODELINFO.SERIALNO.replace_with(
