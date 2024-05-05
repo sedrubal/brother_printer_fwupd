@@ -77,11 +77,10 @@ def get_download_url(
 
     errors: list[ValueError] = []
 
-    for modification_callback in (copy, apply_api_misspelling):
-        api_request_data = modification_callback(api_request_data)
+    for modification_callback in (copy, apply_driver_ews, apply_api_misspelling):
+        api_request_data_str = str(modification_callback(api_request_data))
 
         # curl -X POST -d @hl3040cn-update.xml -H "Content-Type:text/xml"
-        api_request_data_str = str(api_request_data)
         LOGGER.debug(
             "Sending POST request to %s with following content:\n%s",
             FW_UPDATE_URL,
@@ -163,9 +162,28 @@ def parse_response(response: str, firmid: str) -> tuple[str | None, str | None]:
     return latest_version, select_one("PATH")
 
 
+def apply_driver_ews(data: BeautifulSoup) -> BeautifulSoup:
+    """
+    Modify the request data in the way it is required for MFC-L3750CDW, HL-L2360DW and others.
+
+    1. Remove `<SERIALNO>` / `<SELIALNO>`
+    2. Add "EWS" to `<DRIVER>`
+    See https://github.com/sedrubal/brother_printer_fwupd/issues/19#issuecomment-2079813638
+    """
+    LOGGER.info(
+        "Trying again without <SERIALNO> in API request but with <DRIVER>EWS</DRIVER>..."
+    )
+    data = copy(data)
+    data.REQUESTINFO.FIRMUPDATEINFO.MODELINFO.DRIVER.string = "EWS"
+    data.REQUESTINFO.FIRMUPDATEINFO.MODELINFO.SERIALNO.replace_with(
+        Tag(name="SELIALNO", parser="xml")
+    )
+    return data
+
+
 def apply_api_misspelling(data: BeautifulSoup) -> BeautifulSoup:
     """
-    Modify the request data in the way it is required for MFC-L3750CDW.
+    Another modification which works for MFC-L3750CDW, HL-L2360DW and others.
 
     1. Replace `<SERIALNO>` with typo `<SELIALNO>`
     2. Add "EWS" to `<DRIVER>`
