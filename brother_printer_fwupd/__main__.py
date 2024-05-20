@@ -6,14 +6,14 @@ Script to update the firmware of some Brother printers (e. g. MFC).
 import argparse
 import logging
 import sys
-import typing
 import webbrowser
 from pathlib import Path
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 import termcolor
 
 from . import ISSUE_URL
+
 try:
     from .autodiscover_printer import PrinterDiscoverer
 except ImportError:
@@ -31,7 +31,7 @@ from .utils import (
     gooey_if_exists,
 )
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from .models import IPAddress
 
 
@@ -45,16 +45,14 @@ def parse_args():
         prog=__file__,
         description=__doc__.strip().splitlines()[0],
     )
-    if PrinterDiscoverer is None:
-        discovery_available = False
-        blurb = "required, because zeroconf is not available"
-    else:
-        discovery_available = True
+    if PrinterDiscoverer:
         blurb = "default: autodiscover via mdns"
+    else:
+        blurb = "required, because zeroconf is not available"
     parser.add_argument(
         "-p",
         "--printer",
-        required=not discovery_available,
+        required=not PrinterDiscoverer,
         dest="printer",
         metavar="host",
         default=None,

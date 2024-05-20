@@ -3,7 +3,7 @@
 import typing
 from copy import copy
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 import requests
 from bs4 import BeautifulSoup, Tag

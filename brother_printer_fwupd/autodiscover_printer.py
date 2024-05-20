@@ -5,7 +5,7 @@
 
 import ipaddress
 import typing
-from typing import Optional
+from typing import List, Optional
 
 import termcolor
 import zeroconf
@@ -22,7 +22,7 @@ class PrinterDiscoverer(zeroconf.ServiceListener):
     """Discoverer of printers."""
 
     def __init__(self) -> None:
-        self._printers: List[MDNSPrinterInfo] = list()  # In Python 3.10+, list[MDNSPrinterInfo]
+        self._printers: List[MDNSPrinterInfo] = []
         self._zc = zeroconf.Zeroconf()
         self._mode = "CLI"
         self._invalid_answer = False
