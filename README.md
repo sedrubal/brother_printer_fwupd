@@ -50,7 +50,13 @@ To make it a bit easier, I wrote this simple script.
 
 ## Usage
 
-### A: Install package using pip:
+### A: Run package using `pipx`:
+
+```shell
+pipx run brother-printer-fwupd
+```
+
+### B: Install package using `pip`:
 
 ```shell
 pip install --user --upgrade brother-printer-fwupd
@@ -58,11 +64,11 @@ pip install --user --upgrade brother-printer-fwupd
 
 *If this does not work, try `pip install --user --upgrade brother_printer_fwupd`.*
 
-### B: Development installation:
+### C: Development installation:
 
 1. Clone the repo
 2. Install system dependencies: `libxslt-dev`, `libxml2-dev`
-3. `poetry install`
+3. `poetry install --extras autodiscover`
 4. `poetry run brother_printer_fwupd`
 
 Use at your own risk!™
