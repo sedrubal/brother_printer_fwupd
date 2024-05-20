@@ -11,6 +11,7 @@ import sys
 import traceback
 import typing
 from pathlib import Path
+from typing import Dict, List, Literal, Optional, Union
 from urllib.parse import urlencode
 
 import termcolor
@@ -19,6 +20,11 @@ try:
     from gooey import Gooey
 except ImportError:
     Gooey = None
+
+
+ExceptionGroup = getattr(
+    __builtins__, "ExceptionGroup", None
+)  # will be None until Python 3.11
 
 
 def gooey_if_exists(func):
@@ -42,7 +48,9 @@ class GitHubIssueReporter:
         self.handler_cb = handler_cb
         self._handler = logging.StreamHandler(stream=io.StringIO())
         self._handler.setLevel(logging.DEBUG)
-        self._context = dict[str, str | bool | list[str]]()
+
+        # In Python 3.10+: dict[str, str | bool | list[str]]()
+        self._context: Dict[str, str | bool | List[str]] = {}
 
     def __enter__(self):
         self._handler.stream.seek(0)
@@ -55,7 +63,7 @@ class GitHubIssueReporter:
         if not exc_class or exc_class in (SystemExit, KeyboardInterrupt):
             return
 
-        if isinstance(exc, ExceptionGroup):
+        if ExceptionGroup and isinstance(exc, ExceptionGroup):
             LOGGER.error("%s  Errors:", exc.message)
             for err in exc.exceptions:
                 LOGGER.error("  - %s", err)
@@ -128,12 +136,12 @@ class GitHubIssueReporter:
         self.handler_cb(report_url)
         sys.exit(1)
 
-    def set_context_data(self, key: str, value: str | bool | list[str]):
+    def set_context_data(self, key: str, value: Union[str, bool, List[str]]):
         self._context[key] = value
 
 
 def get_running_os() -> (
-    typing.Literal["WINDOWS"] | typing.Literal["MAC"] | typing.Literal["LINUX"]
+    Union[typing.Literal["WINDOWS"], typing.Literal["MAC"], typing.Literal["LINUX"]]
 ):
     if sys.platform.startswith("win") or sys.platform.startswith("cygwin"):
         return "WINDOWS"
@@ -143,7 +151,9 @@ def get_running_os() -> (
         return "LINUX"
 
 
-def add_logging_level(level_name: str, level_num: int, method_name: str | None = None):
+def add_logging_level(
+    level_name: str, level_num: int, method_name: Optional[str] = None
+):
     """
     Comprehensively adds a new logging level to the `logging` module and the
     currently configured logging class.

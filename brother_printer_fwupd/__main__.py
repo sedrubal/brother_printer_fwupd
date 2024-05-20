@@ -6,14 +6,19 @@ Script to update the firmware of some Brother printers (e. g. MFC).
 import argparse
 import logging
 import sys
-import typing
 import webbrowser
 from pathlib import Path
+from typing import TYPE_CHECKING, Optional
 
 import termcolor
 
 from . import ISSUE_URL
-from .autodiscover_printer import PrinterDiscoverer
+
+try:
+    from .autodiscover_printer import PrinterDiscoverer
+except ImportError:
+    PrinterDiscoverer = None
+
 from .firmware_downloader import download_fw, get_download_url
 from .firmware_uploader import upload_fw
 from .models import FWInfo, SNMPPrinterInfo
@@ -26,7 +31,7 @@ from .utils import (
     gooey_if_exists,
 )
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from .models import IPAddress
 
 
@@ -40,13 +45,18 @@ def parse_args():
         prog=__file__,
         description=__doc__.strip().splitlines()[0],
     )
+    if PrinterDiscoverer:
+        blurb = "default: autodiscover via mdns"
+    else:
+        blurb = "required, because zeroconf is not available"
     parser.add_argument(
         "-p",
         "--printer",
+        required=not PrinterDiscoverer,
         dest="printer",
         metavar="host",
         default=None,
-        help="IP Address or hostname of the printer (default: autodiscover via mdns).",
+        help=f"IP Address or hostname of the printer ({blurb})).",
     )
     parser.add_argument(
         "--model",
@@ -71,7 +81,7 @@ def parse_args():
         "--fw-versions",
         dest="fw_versions",
         nargs="*",
-        default=list[FWInfo](),
+        default=[],  # In Python 3.10+: list[FWInfo]
         type=FWInfo.from_str,
         help="Skip SNMP scanning by directly specifying the firmware parts to update.",
     )
@@ -166,8 +176,8 @@ def run(issue_reporter: GitHubIssueReporter):
 
     CONSOLE_LOG_HANDLER.setLevel(logging.DEBUG if args.debug else logging.INFO)
 
-    printer_ip: typing.Optional["IPAddress"] = args.printer
-    upload_port: int | None = None
+    printer_ip: Optional["IPAddress"] = args.printer
+    upload_port: Optional[int] = None
     use_snmp = (
         not args.model or not args.serial or not args.spec or not args.fw_versions
     )
@@ -224,7 +234,7 @@ def run(issue_reporter: GitHubIssueReporter):
         versions_str,
     )
     LOGGER.info("Querying firmware download URL from Brother update API.")
-    download_url: str | None = None
+    download_url: Optional[str] = None
 
     for fw_part in printer_info.fw_versions:
         LOGGER.info("Try to get information for firmware part %s", fw_part)

@@ -2,6 +2,7 @@
 
 import socket
 from pathlib import Path
+from typing import Optional
 
 from .models import IPAddress
 
@@ -10,7 +11,7 @@ PORT_SERVICE_NAME = "pdl-datastream"
 
 def upload_fw(
     target: IPAddress,
-    port: int | None,
+    port: Optional[int],
     fw_file_path: Path = Path("firmware.djf"),
 ):
     """
@@ -21,7 +22,7 @@ def upload_fw(
     cat LZ5413_P.djf | nc lp.local 9100
     ```
     """
-    if port is not None:
+    if port is None:
         try:
             port = socket.getservbyname(PORT_SERVICE_NAME)
         except OSError:
