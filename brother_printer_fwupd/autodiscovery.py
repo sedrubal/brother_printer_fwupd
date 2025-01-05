@@ -3,15 +3,18 @@
 # pylint: disable=C0103
 # pylint: disable=R1723
 
+import argparse
 import ipaddress
+import logging
 import typing
-from typing import List, Optional
+from typing import Optional
 
 import termcolor
 import zeroconf
 
+from .common import common_args
 from .models import MDNSPrinterInfo
-from .utils import LOGGER, clear_screen
+from .utils import CONSOLE_LOG_HANDLER, LOGGER, clear_screen
 
 ZEROCONF_SERVICE_DOMAIN = "_pdl-datastream._tcp.local."
 
@@ -22,18 +25,16 @@ class PrinterDiscoverer(zeroconf.ServiceListener):
     """Discoverer of printers."""
 
     def __init__(self) -> None:
-        self._printers: List[MDNSPrinterInfo] = []
+        self._printers: list[MDNSPrinterInfo] = []
         self._zc = zeroconf.Zeroconf()
-        self._mode = "CLI"
         self._invalid_answer = False
         self._browser: Optional[zeroconf.ServiceBrowser] = None
 
     def remove_service(self, zc: zeroconf.Zeroconf, type_: str, name: str):
-        LOGGER.debug(f"Service {name} removed")
+        """Called when a service disappears."""
+        LOGGER.debug("Service %s removed", name)
         self._remove_printer_infos_by_name(name)
-
-        if self._mode == "CLI":
-            self._update_screen()
+        self._update_screen()
 
     @staticmethod
     def _zc_info_to_mdns_printer_infos(
@@ -50,20 +51,26 @@ class PrinterDiscoverer(zeroconf.ServiceListener):
 
                 return
 
-            product = service_info.properties.get(b"product", None)
+            product_raw = service_info.properties.get(b"product", None)
 
-            if product:
-                product = product.decode("utf8")
+            if product_raw:
+                product = product_raw.decode("utf8")
+            else:
+                product = None
 
-            note = service_info.properties.get(b"note", None)
+            note_raw = service_info.properties.get(b"note", None)
 
-            if note:
-                note = note.decode("utf8")
+            if note_raw:
+                note = note_raw.decode("utf8")
+            else:
+                note = None
 
-            uuid = service_info.properties.get(b"UUID", None)
+            uuid_raw = service_info.properties.get(b"UUID", None)
 
-            if uuid:
-                uuid = uuid.decode("utf8")
+            if uuid_raw:
+                uuid = uuid_raw.decode("utf8")
+            else:
+                uuid = None
 
             yield MDNSPrinterInfo(
                 ip_addr=ip_addr,
@@ -87,21 +94,21 @@ class PrinterDiscoverer(zeroconf.ServiceListener):
 
         if not service_info:
             LOGGER.error(
-                f"Received empty add_service request. Ignoring: {type_} {name}"
+                "Received empty add_service request. Ignoring: %s %s",
+                type_,
+                name,
             )
 
             return
 
-        for printer_info in PrinterDiscoverer._zc_info_to_mdns_printer_infos(
-            service_info, name
-        ):
+        for printer_info in PrinterDiscoverer._zc_info_to_mdns_printer_infos(service_info, name):
             self._printers.append(printer_info)
 
-        if self._mode == "CLI":
-            self._update_screen()
+        self._update_screen()
 
     def add_service(self, zc: zeroconf.Zeroconf, type_: str, name: str):
-        LOGGER.debug(f"Service {name} added")
+        """Called, when a new service appears."""
+        LOGGER.debug("Service %s added", name)
         self._add_printer_infos(zc, type_, name)
 
     def update_service(self, zc: zeroconf.Zeroconf, type_: str, name: str):
@@ -129,25 +136,17 @@ class PrinterDiscoverer(zeroconf.ServiceListener):
                 num_str = termcolor.colored(
                     f"[{str(i).rjust(max_str_len)}]", color="blue", attrs=["bold"]
                 )
-                ip_addr_str = termcolor.colored(
-                    str(info.ip_addr).rjust(max_ip_len), color="yellow"
-                )
+                ip_addr_str = termcolor.colored(str(info.ip_addr).rjust(max_ip_len), color="yellow")
                 port_str = termcolor.colored(f"Port {info.port}")
                 name_str = termcolor.colored(info.name, color="white")
                 product_str = (
-                    termcolor.colored(f"- Product: {info.product}")
-                    if info.product
-                    else ""
+                    termcolor.colored(f"- Product: {info.product}") if info.product else ""
                 )
                 note_str = (
-                    termcolor.colored(f"- Note: {info.note}", attrs=["italic"])
-                    if info.note
-                    else ""
+                    termcolor.colored(f"- Note: {info.note}", attrs=["italic"]) if info.note else ""
                 )
                 uuid_str = (
-                    termcolor.colored(f"- UUID: {info.uuid}", attrs=["italic"])
-                    if info.uuid
-                    else ""
+                    termcolor.colored(f"- UUID: {info.uuid}", attrs=["italic"]) if info.uuid else ""
                 )
                 print(
                     " ".join(
@@ -168,7 +167,7 @@ class PrinterDiscoverer(zeroconf.ServiceListener):
             if len(self._printers) > 1:
                 range_str = f"[0 - {len(self._printers) - 1}; Enter: Cancel]"
             else:
-                range_str = "[0; Enter: Cancel]"
+                range_str = "[0 / Enter: Use first entry; ^C: Cancel]"
 
             range_str = termcolor.colored(range_str, color="blue")
             termcolor.cprint(
@@ -178,9 +177,7 @@ class PrinterDiscoverer(zeroconf.ServiceListener):
                 flush=True,
             )
         else:
-            termcolor.cprint(
-                "No printers found yet.", "yellow", attrs=["italic"], end=" "
-            )
+            termcolor.cprint("No printers found yet.", "yellow", attrs=["italic"], end=" ")
             termcolor.cprint(
                 "Run with --printer=<ip> to skip autodiscovery. [Enter: Cancel]",
                 attrs=["italic"],
@@ -188,41 +185,31 @@ class PrinterDiscoverer(zeroconf.ServiceListener):
 
     def run_cli(self) -> Optional[MDNSPrinterInfo]:
         """Run as interactive terminal application."""
-        self._mode = "CLI"
-        choice: Optional[int] = None
         self._run()
         self._update_screen()
 
         try:
             while True:
-                inpt = input().strip()
+                inpt = input()
 
-                if not inpt:
-                    break
+                if not inpt.strip():
+                    # Enter
+                    if len(self._printers) == 1:
+                        return self._printers[0]
+                    else:
+                        return None
+
                 try:
-                    choice = int(inpt)
-                except ValueError:
-                    choice = None
-
-                if choice in range(len(self._printers)):
-                    break
-                else:
+                    return self._printers[int(inpt)]
+                except (ValueError, IndexError):
                     self._invalid_answer = True
                     self._update_screen()
         except (KeyboardInterrupt, EOFError):
             print()
+            return None
         finally:
             self._stop()
             clear_screen()
-
-        if choice is None:
-            return None
-        try:
-            return self._printers[choice]
-        except KeyError:
-            LOGGER.critical("This should not happen. Try again.")
-
-            return None
 
     def _run(self):
         """Auto detect printer using zeroconf."""
@@ -235,3 +222,24 @@ class PrinterDiscoverer(zeroconf.ServiceListener):
     def _stop(self):
         """Stop discovering."""
         self._zc.close()
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description=__doc__.strip().splitlines()[0],
+    )
+
+    common_args(parser, ip_required=False)
+
+    return parser.parse_args()
+
+
+def main() -> None:
+    """Run the autodiscoverer module."""
+    args = parse_args()
+    CONSOLE_LOG_HANDLER.setLevel(logging.DEBUG if args.debug else logging.INFO)
+
+    discoverer = PrinterDiscoverer()
+    mdns_printer_info = discoverer.run_cli()
+    LOGGER.success("Found %s", mdns_printer_info)

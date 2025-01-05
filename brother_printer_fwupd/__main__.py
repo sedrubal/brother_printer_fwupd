@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Script to update the firmware of some Brother printers (e. g. MFC).
 """
@@ -6,125 +5,28 @@ Script to update the firmware of some Brother printers (e. g. MFC).
 import argparse
 import logging
 import sys
+import typing
 import webbrowser
-from pathlib import Path
-from typing import TYPE_CHECKING, Optional
 
 import termcolor
 
 from . import ISSUE_URL
+from .common import common_args, printer_info_args
+from .firmware_downloader import fw_downloader_args, get_info_and_download_fw
+from .firmware_uploader import fw_uploader_args, upload_fw
+from .models import SNMPPrinterInfo
+from .snmp_info import get_snmp_info_sync, snmp_args
+from .utils import CONSOLE_LOG_HANDLER, LOGGER, GitHubIssueReporter
 
 try:
-    from .autodiscover_printer import PrinterDiscoverer
+    from .autodiscovery import PrinterDiscoverer
+
+    PRINTER_DISCOVERER: typing.Optional[typing.Type[PrinterDiscoverer]] = PrinterDiscoverer
 except ImportError:
-    PrinterDiscoverer = None
+    PRINTER_DISCOVERER = None
 
-from .firmware_downloader import download_fw, get_download_url
-from .firmware_uploader import upload_fw
-from .models import FWInfo, SNMPPrinterInfo
-from .snmp_info import get_snmp_info
-from .utils import (
-    CONSOLE_LOG_HANDLER,
-    LOGGER,
-    GitHubIssueReporter,
-    get_running_os,
-    gooey_if_exists,
-)
-
-if TYPE_CHECKING:
+if typing.TYPE_CHECKING:
     from .models import IPAddress
-
-
-RUNNING_OS = get_running_os()
-
-
-@gooey_if_exists
-def parse_args():
-    """Parse command line args."""
-    parser = argparse.ArgumentParser(
-        prog=__file__,
-        description=__doc__.strip().splitlines()[0],
-    )
-    if PrinterDiscoverer:
-        blurb = "default: autodiscover via mdns"
-    else:
-        blurb = "required, because zeroconf is not available"
-    parser.add_argument(
-        "-p",
-        "--printer",
-        required=not PrinterDiscoverer,
-        dest="printer",
-        metavar="host",
-        default=None,
-        help=f"IP Address or hostname of the printer ({blurb})).",
-    )
-    parser.add_argument(
-        "--model",
-        dest="model",
-        type=str,
-        help="Skip SNMP scanning by directly specifying the printer model.",
-    )
-    parser.add_argument(
-        "--serial",
-        dest="serial",
-        type=str,
-        help="Skip SNMP scanning by directly specifying the printer serial.",
-    )
-    parser.add_argument(
-        "--spec",
-        dest="spec",
-        type=str,
-        help="Skip SNMP scanning by directly specifying the printer spec.",
-    )
-    parser.add_argument(
-        "--fw",
-        "--fw-versions",
-        dest="fw_versions",
-        nargs="*",
-        default=[],  # In Python 3.10+: list[FWInfo]
-        type=FWInfo.from_str,
-        help="Skip SNMP scanning by directly specifying the firmware parts to update.",
-    )
-    parser.add_argument(
-        "-c",
-        "--community",
-        dest="community",
-        default="public",
-        help="SNMP Community string for the printer (default: '%(default)s').",
-    )
-    parser.add_argument(
-        "-o",
-        "--fw-dir",
-        type=Path,
-        dest="fw_dir",
-        default=".",
-        help="Directory, where the firmware will be downloaded (default: '%(default)s').",
-    )
-    parser.add_argument(
-        "--os",
-        dest="os",
-        type=str.upper,
-        default=RUNNING_OS,
-        choices=["WINDOWS", "MAC", "LINUX"],
-        help="Operating system to report when downloading firmware (default: '%(default)s').",
-    )
-    parser.add_argument(
-        "--download-only",
-        dest="download_only",
-        action="store_true",
-        help=(
-            "Do no install update but download firmware and save it"
-            " under the directory path given with --fw-dir."
-        ),
-    )
-    parser.add_argument(
-        "--debug",
-        dest="debug",
-        action="store_true",
-        help="Print debug messages",
-    )
-
-    return parser.parse_args()
 
 
 def main():
@@ -176,21 +78,21 @@ def run(issue_reporter: GitHubIssueReporter):
 
     CONSOLE_LOG_HANDLER.setLevel(logging.DEBUG if args.debug else logging.INFO)
 
-    printer_ip: Optional["IPAddress"] = args.printer
-    upload_port: Optional[int] = None
-    use_snmp = (
-        not args.model or not args.serial or not args.spec or not args.fw_versions
-    )
+    printer_ip: "typing.Optional[IPAddress]" = args.ip
+    upload_port: typing.Optional[int] = args.pdl_ds_port
+    use_snmp = not args.model or not args.serial or not args.spec or not args.fw_versions
     printer_ip_required = use_snmp or not args.download_only
 
     if not printer_ip and printer_ip_required:
         LOGGER.info("Discovering printer via MDNS.")
-        discoverer = PrinterDiscoverer()
+        assert PRINTER_DISCOVERER
+        discoverer = PRINTER_DISCOVERER()
         mdns_printer_info = discoverer.run_cli()
 
         if mdns_printer_info:
             printer_ip = mdns_printer_info.ip_addr
-            upload_port = mdns_printer_info.port
+            if not upload_port:
+                upload_port = mdns_printer_info.port
 
     if not printer_ip and printer_ip_required:
         LOGGER.critical("No printer given or found.")
@@ -202,14 +104,11 @@ def run(issue_reporter: GitHubIssueReporter):
     if use_snmp:
         LOGGER.info("Querying printer info via SNMP.")
         assert printer_ip, "Printer IP is required but not given."
-        printer_info = get_snmp_info(target=printer_ip, community=args.community)
-    else:
-        printer_info = SNMPPrinterInfo(
-            model=args.model,
-            serial=args.serial,
-            spec=args.spec,
-            fw_versions=args.fw_versions,
+        printer_info: SNMPPrinterInfo = get_snmp_info_sync(
+            target=printer_ip, community=args.community, port=args.snmp_port
         )
+    else:
+        printer_info = SNMPPrinterInfo.from_args(args)
 
     if printer_info.model:
         issue_reporter.set_context_data("--model", printer_info.model)
@@ -234,40 +133,27 @@ def run(issue_reporter: GitHubIssueReporter):
         versions_str,
     )
     LOGGER.info("Querying firmware download URL from Brother update API.")
-    download_url: Optional[str] = None
 
     for fw_part in printer_info.fw_versions:
-        LOGGER.info("Try to get information for firmware part %s", fw_part)
-
-        latest_version, download_url = get_download_url(
+        fw_file_path = get_info_and_download_fw(
             printer_info=printer_info,
-            firmid=str(fw_part.firmid),
-            reported_os=args.os,
-        )
-
-        if not download_url:
-            continue
-
-        assert download_url
-
-        LOGGER.debug("  Download URL is %s", download_url)
-        LOGGER.success("Downloading firmware file.")
-        fw_file_path = download_fw(
-            url=download_url,
-            dst_dir=args.fw_dir,
-            printer_model=printer_info.model,
             fw_part=fw_part,
-            latest_version=latest_version,
+            os=args.os,
+            fw_dir=args.fw_dir,
         )
+
+        if not fw_file_path:
+            continue
 
         if args.download_only:
             LOGGER.info("Skipping firmware upload due to --download-only")
         else:
-            LOGGER.info("Uploading firmware file to printer via jetdirect.")
             assert printer_ip, "Printer IP is required but not given"
             try:
                 upload_fw(
-                    target=printer_ip, port=upload_port, fw_file_path=fw_file_path
+                    target=printer_ip,
+                    port=args.pdl_ds_port,
+                    fw_file_path=fw_file_path,
                 )
             except OSError as err:
                 LOGGER.error(
@@ -276,11 +162,37 @@ def run(issue_reporter: GitHubIssueReporter):
                     fw_part,
                     str(err),
                 )
+
                 continue
 
             input("Continue? ")
 
     LOGGER.success("Done.")
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(
+        description=__doc__.strip().splitlines()[0],
+    )
+
+    common_args(parser, ip_required=not PRINTER_DISCOVERER)
+    snmp_args(parser)
+    printer_info_args(parser)
+    fw_downloader_args(parser)
+    fw_uploader_args(parser, set_pdl_ds_port_default=not PRINTER_DISCOVERER)
+
+    parser.add_argument(
+        "--download-only",
+        dest="download_only",
+        action="store_true",
+        help=(
+            "Do no install update but download firmware and save it"
+            " under the directory path given with --fw-dir."
+        ),
+    )
+
+    return parser.parse_args()
 
 
 if __name__ == "__main__":

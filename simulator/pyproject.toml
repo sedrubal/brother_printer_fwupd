@@ -1,0 +1,18 @@
+[project]
+name = "brother-printer-fwupd-snmp-simulator"
+version = "0.1.0"
+description = "SNMP simulator for Brother Printers"
+authors = [
+    {name = "sedrubal", email = "dev@sedrubal.de"},
+]
+license = {text = "GPL-3.0-or-later"}
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "snmpsim>=1.1.7",
+    "zeroconf>=0.136.2",
+]
+classifiers = ["Private :: Do not upload"]
+
+[tool.ruff]
+line-length = 100

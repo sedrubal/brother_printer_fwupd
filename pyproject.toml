@@ -1,44 +1,58 @@
-[tool.poetry]
+[project]
+authors = [
+    {name = "sedrubal", email = "dev@sedrubal.de"},
+]
+license = {text = "GPL-3.0-or-later"}
+requires-python = "<4.0,>=3.9"
+dependencies = [
+    "requests>=2.32.3",
+    "beautifulsoup4>=4.12.3",
+    "lxml>=5.3.0",
+    "termcolor>=2.5.0",
+    "pysnmp>=7.1.15",
+]
 name = "brother_printer_fwupd"
-version = "0.7.0"
+version = "0.8.0"
 description = "Script to update the firmware of some Brother printers (e. g. MFC)."
-authors = ["sedrubal <dev@sedrubal.de>"]
-repository = "https://github.com/sedrubal/brother_printer_fwupd.git"
-license = "GPL-3.0-or-later"
 readme = "README.md"
 
-[tool.poetry.dependencies]
-python = "^3.9"
-pysnmp = "^4.4.12"
-pyasn1 = "^0.5.1"
-requests = "^2.31.0"
-BeautifulSoup4 = "^4.12.0"
-Gooey = { version = "^1.0.8", optional = true }
-lxml = "^4.9.0"
-zeroconf = { version = "^0.28.8", optional = true }
-termcolor = "^1.1.0"
-
-[tool.poetry.group.dev.dependencies]
-mypy = "^1.8.0"
-ruff = "^0.1.15"
-isort = "^5.13.0"
-pre-commit = "^3.6.0"
-black = "^23.12.0"
-pylint = "^3.1.0"
-types-requests = "^2.31.0"
-types-termcolor = "^1.1.6"
-pyre-check = "^0.9.19"
+[project.urls]
+repository = "https://github.com/sedrubal/brother_printer_fwupd.git"
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
 
-[tool.poetry.extras]
-graphical = ["Gooey"]
-autodiscover = ["zeroconf"]
+[dependency-groups]
+dev = [
+    "black<25.0.0,>=24.10.0",
+    "isort<6.0.0,>=5.13.2",
+    "mypy>=1.14.0,<2.0.0",
+    "pre-commit<4.0.0,>=3.8.0",
+    "pylint>=3.3.1,<4.0.0",
+    "pyre-check<1.0.0,>=0.9.22",
+    "ruff>=0.8.6,<1.0.0",
+    "tox-uv>=1.16.1",
+    "tox<5.0.0,>=4.15.0",
+    "types-requests<3.0.0,>=2.31.0",
+    "types-termcolor<2.0.0,>=1.1.6",
+]
 
-[tool.poetry.scripts]
-brother_printer_fwupd = 'brother_printer_fwupd.__main__:main'
+[project.optional-dependencies]
+autodiscover = [
+    "zeroconf<1.0.0,>=0.136.0",
+]
+
+[project.scripts]
+brother_printer_fwupd = "brother_printer_fwupd.__main__:main"
+brother-printer-fwupd = "brother_printer_fwupd.__main__:main"
+brother-printer-fwupd-snmp-info = "brother_printer_fwupd.snmp_info:main"
+brother-printer-fwupd-autodiscover = "brother_printer_fwupd.autodiscovery:main"
+brother-printer-fwupd-download = "brother_printer_fwupd.firmware_downloader:main"
+brother-printer-fwupd-upload = "brother_printer_fwupd.firmware_uploader:main"
+
+[tool.isort]
+profile = "black"
 
 [tool.ruff]
 line-length = 100

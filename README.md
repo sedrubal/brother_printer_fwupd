@@ -68,13 +68,21 @@ pip install --user --upgrade brother-printer-fwupd
 
 1. Clone the repo
 2. Install system dependencies: `libxslt-dev`, `libxml2-dev`
-3. `poetry install --extras autodiscover`
-4. `poetry run brother_printer_fwupd`
+3. `uv sync --all-extras`
+4. `uv run brother-printer-fwupd --help`
+5. `uv run brother-printer-fwupd-autodiscover --help`
+6. `uv run brother-printer-fwupd-snmp-info --help`
 
 Use at your own risk!™
 
 Contributions welcome.
 
+## Unit tests
+
+```bash
+uv run tox
+```
+
 ## License
 
-[© 2024 sedrubal (GPLv3)](./LICENSE)
+[© 2025 sedrubal (GPLv3)](./LICENSE)
