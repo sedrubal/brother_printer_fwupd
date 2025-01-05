@@ -50,21 +50,29 @@ To make it a bit easier, I wrote this simple script.
 
 ## Usage
 
-### A: Run package using `pipx`:
+### A: Run with docker / podman:
 
-```shell
-pipx run brother-printer-fwupd
+The image is published on [hub.docker.com](https://hub.docker.com/r/therealsedrubal/brother-printer-fwupd).
+
+```bash
+podman run --rm -it --network=host therealsedrubal/brother-printer-fwupd
 ```
 
-### B: Install package using `pip`:
+### B: Run package using `pipx`:
 
 ```shell
-pip install --user --upgrade brother-printer-fwupd
+pipx run brother-printer-fwupd[autodiscover]
+```
+
+### C: Install package using `pip`:
+
+```shell
+pip install --user --upgrade brother-printer-fwupd[autodiscover]
 ```
 
 *If this does not work, try `pip install --user --upgrade brother_printer_fwupd`.*
 
-### C: Development installation:
+### D: Development installation:
 
 1. Clone the repo
 2. Install system dependencies: `libxslt-dev`, `libxml2-dev`
@@ -78,6 +86,15 @@ Use at your own risk!™
 Contributions welcome.
 
 ## Unit tests
+
+Start the simulator in a second terminal:
+
+```bash
+cd ./simulator/
+uv run ./run.py
+```
+
+Make sure, that you have all python interpreter versions installed. Then, run the unit test:
 
 ```bash
 uv run tox
